@@ -36,12 +36,22 @@ namespace dwa_planner
         return heading;
     }
 
-    float DWAPlanner::calc_dist(float linear, float angular)
+    float DWAPlanner::calc_dist(void)
     {
+        float min_distance;
+        bool flg = true;
         std::vector<geometry_msgs::msg::Point> point_list = scan_to_cartesian();
         for(auto &v : point_list){
-            //距離計算
+            float distance = sqrt(pow(robot_odometry.pose.pose.position.y - v.y, robot_odometry.pose.pose.position.x - v.x));
+            if(flg == true){
+                flg = false;
+                min_distance = distance;
+            }else{
+                if(min_distance > distance) min_distance = distance;
+            }
         }
+        
+        return min_distance;
     }
 
     float DWAPlanner::calc_velocity(void)
