@@ -55,10 +55,34 @@ extern "C" {
 #include "geometry_msgs/msg/point.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 
+#define DT 0.1
+
 using namespace std::chrono_literals;
 
 namespace dwa_planner
 {
+    typedef struct Limit_{
+        float min_cost = 1e6;
+        float min_obs_cost = 0.0;
+        float min_goal_cost = 0.0;
+        float min_speed_cost = 0.0;
+    } Limit;
+
+    typedef struct State_{
+      float x_position=0.0;
+      float y_position=0.0;
+      float yaw=0.0;
+      float velocity=0.0;
+      float yawrate=0.0;
+    } State;
+
+    typedef struct Window_{
+      float min_velocity;
+      float max_velocity;
+      float min_yawrate;
+      float max_yawrate;
+    } Window;
+
     class DWAPlanner : public rclcpp::Node
     {
         public:
@@ -73,7 +97,8 @@ namespace dwa_planner
             float calc_heading(geometry_msgs::msg::Point goal_point);
             float calc_dist(float linear, float angular);
             float calc_velocity(void);
-
+            Window calc_dynamic_window();
+            void motion(State state, const float velocity, const double yawrate);
 
             rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_subscription_;
             rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscription_;
@@ -86,14 +111,16 @@ namespace dwa_planner
 
             std::vector<geometry_msgs::msg::Point> point_list;
 
-            struct Limit{
-                float cost = 1e6;
-                float min_obs_cost;
-                float min_goal_cost;
-                float min_speed_cost;
-            }
-            
+            std::vector<State> traj_;
 
+            float MAX_VELOCITY_;
+            float MIN_VELOCITY_;
+            float MAX_ACCELERATION_;
+            float MAX_ANGULAR_ACCELERATION_;
+            float MAX_YAWRATE_;
+            float VELOCITY_RESOLUTION_;
+            float YAWRATE_RESOLUTION_;
+            int PREDICT_TIME_;
 
     }
 }
