@@ -48,11 +48,12 @@ extern "C" {
 #include <chrono>
 #include <vector>
 #include <string>
-#include<math.h>
+#include <cmath>
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "geometry_msgs/msg/point.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 
 #define DT 0.1
@@ -93,25 +94,27 @@ namespace dwa_planner
         private:
             void scan_callback(sensor_msgs::msg::LaserScan::SharedPtr msg);
             void odom_callback(nav_msgs::msg::Odometry::SharedPtr msg);
+            void local_goal_callback(geometry_msgs::msg::PoseStamped::SharedPtr msg);
             geometry_msgs::msg::Point scan_to_cartesian();
             float calc_heading(geometry_msgs::msg::Point goal_point);
-            float calc_dist(float linear, float angular);
+            float calc_dist(void);
             float calc_velocity(void);
             Window calc_dynamic_window();
             void motion(State state, const float velocity, const double yawrate);
 
             rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_subscription_;
             rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscription_;
-            
+            rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr local_goal_subscription_;
+
             sensor_msgs::msg::LaserScan scan;
             nav_msgs::msg::Odometry odometry;
+            
+
             bool scan_update_flg;
             geometry_msgs::Twist current_velocity;
             bool odom_updated
 
             std::vector<geometry_msgs::msg::Point> point_list;
-
-            std::vector<State> traj_;
 
             float MAX_VELOCITY_;
             float MIN_VELOCITY_;
@@ -120,7 +123,13 @@ namespace dwa_planner
             float MAX_YAWRATE_;
             float VELOCITY_RESOLUTION_;
             float YAWRATE_RESOLUTION_;
-            int PREDICT_TIME_;
+            float PREDICT_TIME_;
+
+            float HEADING_COST_GAIN;
+            float DIST_COST_GAIN;
+            float VELOCITY_COST_GAIN;
+
+            float TARGET_VELOCITY;
 
     }
 }

@@ -8,6 +8,7 @@ namespace dwa_planner
         scan_update_flg = false;
         scan_subscription_ = this->create_subscription<sensor_msgs::msg::LaserScan>("scan", 10, std::bind(&DWAPlanner::scan_callback, this, std::placeholders::_1));
         odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>("odom", 10, std::bind(&DWAPlanner::odom_callback, this, std::placeholders::_1));
+        local_goal_subscription_ = this->create_subscription<geometry_msgs::msg::PoseStamped>("/local_goal", 1, std::bind(&DWAPlanner::local_goal_callback, this, std::placeholders::_1));
 
         this->declare_parameter("MAX_VELOCITY", 0.0);
         this->get_parameter("MAX_VELOCITY", MAX_VELOCITY_);
@@ -26,6 +27,16 @@ namespace dwa_planner
         this->declare_parameter("PREDICT_TIME", 0.0);
         this->get_parameter("PREDICT_TIME", PREDICT_TIME_);
 
+        this->declare_parameter("HEADING_COST_GAIN", 0.0);
+        this->get_parameter("HEADING_COST_GAIN", HEADING_COST_GAIN);
+        this->declare_parameter("DIST_COST_GAIN", 0.0);
+        this->get_parameter("DIST_COST_GAIN", DIST_COST_GAIN);
+        this->declare_parameter("VELOCITY_COST_GAIN", 0.0);
+        this->get_parameter("VELOCITY_COST_GAIN", VELOCITY_COST_GAIN);
+
+        this->declare_parameter("TARGET_VELOCITY", 0.0);
+        this->get_parameter("TARGET_VELOCITY", TARGET_VELOCITY);
+
 
     }
 
@@ -40,6 +51,11 @@ namespace dwa_planner
     {
         robot_odometry = *msg;
         odom_updated = true;
+    }
+
+    void DWAPlanner::local_goal_callback(geometry_msgs::msg::PoseStamped::SharedPtr msg)
+    {
+        
     }
 
     Window DWAPlanner::calc_dynamic_window(void)
@@ -88,9 +104,10 @@ namespace dwa_planner
         return max_distance;
     }
 
-    float DWAPlanner::calc_velocity(const float target_velocity)
+    float DWAPlanner::calc_velocity(const std::vector<State> traj, const float target_velocity)
     {
-        
+        float cost = fabs(target_velocity - fabs(traj[traj.size()-1].velocity)); //軌跡の終端の速度と目的の速度との差
+        return cost;
     }
 
 
@@ -110,30 +127,41 @@ namespace dwa_planner
         return point_list;
     }
 
-    State DWAPlanner::motion(State state)
+    State DWAPlanner::motion(State state, float velocity, float yawrate)
     { 
-        float velocity = robot_odometry.twist.twist.linear.x;
-        float yawrate = robot_odometry.twist.twist.linear.x;
-
         state.yaw += yawrate*DT;
         state.x += velocity*cos(state.yaw)*DT;
         state.y += velocity*sin(state.yaw)*DT;
-
         state.velocity = velocity;
         state.yawrate = yawrate;
+
+        return state;
     }
-
-
 
     void DWAPlanner::dwaplanner(Window dynamic_window, geometry_msgs::msg::Point goal_point, std::vector<geometry_msgs::msg::Point> point_list)
     {
         Limit limit_;
         State state_;
+        state_.velocity = robot_odometry.twist.twist.linear.x;
+        state_.yawrate = robot_odometry.twist.twist.angular.z;
         for(float v=dynamic_window.min_velocity; v<=dynamic_window.max_velocity; v+=VELOCITY_RESOLUTION_){
             for(float w=dynamic_window.min_yawrate; w<=dynamic_window.max_yawrate; w+=YAWRATE_RESOLUTION_){
+                state_.x_position = 0.0;
+                state_.y_position = 0.0;
+                state_.yaw = 0.0;
+                state_.velocity = robot_odometry.twist.twist.linear.x;
+                state_.yawrate = robot_odometry.twist.twist.angular.z;
+                //予測軌跡
+                std::vector<State> traj_;
                 for(float t=0.0; t<=PREDICT_TIME_; t+=DT){
-                    
+                    state_ = motion(state_, v, w);
+                    traj_.push_back(state_);
                 }
+                
+                float heading = calc_heading();
+                float dist = calc_dist();
+                float velocity = calc_velocity(traj_, TARGET_VELOCITY);
+                float final_cost = 
             }
         }
 
