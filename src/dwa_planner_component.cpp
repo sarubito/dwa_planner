@@ -37,6 +37,11 @@ namespace dwa_planner
         this->declare_parameter("TARGET_VELOCITY", 0.0);
         this->get_parameter("TARGET_VELOCITY", TARGET_VELOCITY);
 
+        this->declare_parameter("ROBOT_FRAME", "base_link");
+        this->get_parameter("ROBOT_FRAME", ROBOT_FRAME);
+        this->declare_parameter("SOURCE_FRAME", "map");
+        this->get_parameter("SOURCE_FRAME", SOURCE_FRAME);
+
 
     }
 
@@ -55,7 +60,13 @@ namespace dwa_planner
 
     void DWAPlanner::local_goal_callback(geometry_msgs::msg::PoseStamped::SharedPtr msg)
     {
-        
+        local_goal = *msg;
+        //地図座標系からロボット座標系に座標変換
+        try{
+            transformStamped = tfBuffer.lookupTransform(ROBOT_FRAME, SOURCE_FRAME, this->get_clock()->now());
+        } catch(tf2::TransformException ex){
+            RCLCPP_INFO(this->get_logger(),"%s", ex.what());
+        }
     }
 
     Window DWAPlanner::calc_dynamic_window(void)

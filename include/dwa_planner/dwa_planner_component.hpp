@@ -55,6 +55,9 @@ extern "C" {
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "tf2_ros/transform_listener.h"
+#include "tf2_ros/buffer.h"
+#include "tf2/exceptions.h"
 
 #define DT 0.1
 
@@ -108,13 +111,19 @@ namespace dwa_planner
 
             sensor_msgs::msg::LaserScan scan;
             nav_msgs::msg::Odometry odometry;
-            
+            geometry_msgs::msg::PoseStamped local_goal;
 
             bool scan_update_flg;
             geometry_msgs::Twist current_velocity;
             bool odom_updated
 
             std::vector<geometry_msgs::msg::Point> point_list;
+
+            tf2_ros::Buffer tfBuffer;
+            tf2_ros::TransformListener tfListener(tfBuffer);
+            geometry_msgs::msg::TransformStamped transformStamped;
+            geometry_msgs::msg::Point point;
+
 
             float MAX_VELOCITY_;
             float MIN_VELOCITY_;
@@ -130,6 +139,8 @@ namespace dwa_planner
             float VELOCITY_COST_GAIN;
 
             float TARGET_VELOCITY;
+            std::string ROBOT_FRAME;
+            std::string SOURCE_FRAME;
 
     }
 }
