@@ -64,6 +64,7 @@ namespace dwa_planner
         //地図座標系からロボット座標系に座標変換
         try{
             transformStamped = tfBuffer.lookupTransform(ROBOT_FRAME, SOURCE_FRAME, this->get_clock()->now());
+            point.x = transformStamped.transform
         } catch(tf2::TransformException ex){
             RCLCPP_INFO(this->get_logger(),"%s", ex.what());
         }
@@ -172,7 +173,7 @@ namespace dwa_planner
                 float heading = calc_heading();
                 float dist = calc_dist();
                 float velocity = calc_velocity(traj_, TARGET_VELOCITY);
-                float final_cost = 
+                float final_cost = (HEADING_COST_GAIN * heading) + (DIST_COST_GAIN * dist) + (VELOCITY_COST_GAIN * velocity); 
             }
         }
 
