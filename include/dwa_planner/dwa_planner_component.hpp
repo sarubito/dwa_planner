@@ -52,8 +52,10 @@ extern "C" {
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
-#include "geometry_msgs/msg/point.hpp"
+#include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/point.hpp"
+#include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "tf2_ros/transform_listener.h"
 #include "tf2_ros/buffer.h"
@@ -98,16 +100,22 @@ namespace dwa_planner
             void scan_callback(sensor_msgs::msg::LaserScan::SharedPtr msg);
             void odom_callback(nav_msgs::msg::Odometry::SharedPtr msg);
             void local_goal_callback(geometry_msgs::msg::PoseStamped::SharedPtr msg);
-            geometry_msgs::msg::Point scan_to_cartesian();
-            float calc_heading(geometry_msgs::msg::Point goal_point);
+            void process_callback(void);
+            geometry_msgs::msg::Point scan_to_cartesian(void);
+            float calc_heading(const std::vector<State> traj, geometry_msgs::msg::Pose goal_pose);
             float calc_dist(void);
-            float calc_velocity(void);
-            Window calc_dynamic_window();
+            float calc_velocity(const std::vector<State> traj);
+            Window calc_dynamic_window(void);
             void motion(State state, const float velocity, const double yawrate);
+
+            std::vector<State> dwaplanner(Window dynamic_window, geometry_msgs::msg::Pose goal_pose);
 
             rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_subscription_;
             rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscription_;
             rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr local_goal_subscription_;
+
+            rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher;
+            rclcpp::TimerBase::SharedPtr timer_;
 
             sensor_msgs::msg::LaserScan scan;
             nav_msgs::msg::Odometry odometry;
@@ -121,8 +129,8 @@ namespace dwa_planner
 
             tf2_ros::Buffer tfBuffer;
             tf2_ros::TransformListener tfListener(tfBuffer);
-            geometry_msgs::msg::TransformStamped transformStamped;
-            geometry_msgs::msg::Point point;
+            geometry_msgs::msg::TransformStamped transformStamped_;
+            geometry_msgs::msg::Pose local_goal_pose_;
 
 
             float MAX_VELOCITY_;

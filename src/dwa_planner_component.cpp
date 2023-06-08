@@ -10,6 +10,9 @@ namespace dwa_planner
         odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>("odom", 10, std::bind(&DWAPlanner::odom_callback, this, std::placeholders::_1));
         local_goal_subscription_ = this->create_subscription<geometry_msgs::msg::PoseStamped>("/local_goal", 1, std::bind(&DWAPlanner::local_goal_callback, this, std::placeholders::_1));
 
+        cmd_vel_publisher = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
+        timer_ = this->create_wall_timer(500ms, std::bind(&DWAPlanner::process_callback, this));
+
         this->declare_parameter("MAX_VELOCITY", 0.0);
         this->get_parameter("MAX_VELOCITY", MAX_VELOCITY_);
         this->declare_parameter("MIN_VELOCITY", 0.0);
@@ -45,6 +48,19 @@ namespace dwa_planner
 
     }
 
+    void DWAPlanner::process_callback(void){
+        auto cmd_vel = geometry_msgs::msg::Twist();
+        Window dynamic_window = calc_dynamic_window();
+        std::vector<State> best_traj_ = dwaplanner(dynamic_window, local_goal_pose_);
+        cmd_vel.linear.x = best_traj_[0].velocity;
+        cmd_vel.linear.y = 0.0;
+        cmd_vel.linear.z = 0.0;
+        cmd_vel.angular.x = 0.0;
+        cmd_vel.angular.y = 0.0;
+        cmd_vel.angular.z = best_traj_[0].yawrate;
+        cmd_vel_publisher.publish(cmd_vel);
+    }
+
     void DWAPlanner::scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
     {
         scan = *msg;
@@ -63,8 +79,14 @@ namespace dwa_planner
         local_goal = *msg;
         //地図座標系からロボット座標系に座標変換
         try{
-            transformStamped = tfBuffer.lookupTransform(ROBOT_FRAME, SOURCE_FRAME, this->get_clock()->now());
-            point.x = transformStamped.transform
+            transformStamped_ = tfBuffer.lookupTransform(ROBOT_FRAME, SOURCE_FRAME, this->get_clock()->now());
+            local_goal_pose_.position.x = transformStamped_.transform.translation.x;
+            local_goal_pose_.position.y = transformStamped_.transform.translation.y;
+            local_goal_pose_.position.z = transformStamped_.transform.translation.z;
+            local_goal_pose_.orientation.x = transformStamped_.transform.rotation.x;
+            local_goal_pose_.orientation.y = transformStamped_.transform.rotation.y;
+            local_goal_pose_.orientation.z = transformStamped_.transform.rotation.z;
+            local_goal_pose_.orientation.w = transformStamped_.transform.rotation.w;
         } catch(tf2::TransformException ex){
             RCLCPP_INFO(this->get_logger(),"%s", ex.what());
         }
@@ -75,6 +97,7 @@ namespace dwa_planner
         geometry_msgs::msg::Twist twist;
         twist.linear = robot_odometry.twist.twist.linear;
         Window window;
+        //ダイナミックウィンドウの計算
         window.min_velocity = std::max((twist.linear.x - MAX_ACCELERATION_*DT), MIN_VELOCITY_);
         window.max_velocity = std::min((twist.linear.x + MAX_ACCELERATION_*DT),MAX_VELOCITY_);
         window.min_yawrate = std::max((twist.angular.z - MAX_ANGULAR_ACCELERATION_*DT), -MAX_YAWRATE_);
@@ -85,9 +108,9 @@ namespace dwa_planner
 
 
 
-    float DWAPlanner::calc_heading(geometry_msgs::msg::Point goal_point)
+    float DWAPlanner::calc_heading(const std::vector<State> traj,geometry_msgs::msg::Pose goal_pose)
     {
-        float angle = atan2(robot_odometry.pose.pose.position.y - goal_point.y, robot_odometry.pose.pose.position.x - goal_point.x);
+        float angle = atan2(traj[traj.size()-1].y_position - goal_pose.position.y, traj[traj.size()-1].y_position - goal_pose.position.x);
         if(angle > (2 * asin(odometry.pose.pose.orientation.z)))
         {
             float heading = angle - (2 * asin(odometry.pose.pose.orientation.z));
@@ -116,9 +139,9 @@ namespace dwa_planner
         return max_distance;
     }
 
-    float DWAPlanner::calc_velocity(const std::vector<State> traj, const float target_velocity)
+    float DWAPlanner::calc_velocity(const std::vector<State> traj)
     {
-        float cost = fabs(target_velocity - fabs(traj[traj.size()-1].velocity)); //軌跡の終端の速度と目的の速度との差
+        float cost traj[traj.size()-1].velocity; //並進速度が出ていれば評価が上がる
         return cost;
     }
 
@@ -141,42 +164,58 @@ namespace dwa_planner
 
     State DWAPlanner::motion(State state, float velocity, float yawrate)
     { 
+        state.x_position += velocity*cos(state.yaw)*DT;
+        state.y_position += velocity*sin(state.yaw)*DT;
         state.yaw += yawrate*DT;
-        state.x += velocity*cos(state.yaw)*DT;
-        state.y += velocity*sin(state.yaw)*DT;
         state.velocity = velocity;
         state.yawrate = yawrate;
 
         return state;
     }
 
-    void DWAPlanner::dwaplanner(Window dynamic_window, geometry_msgs::msg::Point goal_point, std::vector<geometry_msgs::msg::Point> point_list)
+    std::vector<State> DWAPlanner::dwaplanner(Window dynamic_window, geometry_msgs::msg::Pose goal_pose)
     {
         Limit limit_;
         State state_;
         state_.velocity = robot_odometry.twist.twist.linear.x;
         state_.yawrate = robot_odometry.twist.twist.angular.z;
+        std::vector<std::vector<State>> trajectorys_;
+        //軌跡計算
         for(float v=dynamic_window.min_velocity; v<=dynamic_window.max_velocity; v+=VELOCITY_RESOLUTION_){
             for(float w=dynamic_window.min_yawrate; w<=dynamic_window.max_yawrate; w+=YAWRATE_RESOLUTION_){
                 state_.x_position = 0.0;
                 state_.y_position = 0.0;
                 state_.yaw = 0.0;
-                state_.velocity = robot_odometry.twist.twist.linear.x;
-                state_.yawrate = robot_odometry.twist.twist.angular.z;
+                state_.velocity = 0.0;
+                state_.yawrate = 0.0;
                 //予測軌跡
                 std::vector<State> traj_;
                 for(float t=0.0; t<=PREDICT_TIME_; t+=DT){
-                    state_ = motion(state_, v, w);
+                    state_ = motion(state_, v, w); //速度は変わらないと仮定して経路を生成
                     traj_.push_back(state_);
                 }
-                
-                float heading = calc_heading();
-                float dist = calc_dist();
-                float velocity = calc_velocity(traj_, TARGET_VELOCITY);
-                float final_cost = (HEADING_COST_GAIN * heading) + (DIST_COST_GAIN * dist) + (VELOCITY_COST_GAIN * velocity); 
+                trajectorys_.push_back(traj_);
             }
         }
-
+        //軌跡の評価
+        float final_cost=NULL;
+        float cost=NULL;
+        int element=NULL;
+        for(size_t i=0; i<trajectorys_.size(); i++){
+            float heading = calc_heading(trajectorys_[i], goal_pose);
+            float dist = calc_dist();
+            float velocity = calc_velocity(trajectorys_[i]);
+            cost = (HEADING_COST_GAIN * heading) + (DIST_COST_GAIN * dist) + (VELOCITY_COST_GAIN * velocity);
+            if(final_cost == NULL){ 
+                final_cost = cost;
+                element = i
+            }else{
+                if(final_cost < cost){
+                    final_cost = cost;
+                    element = i;
+                }
+            }
+        }
+        return trajectorys_[element]; 
     }
-
 }
