@@ -77,11 +77,13 @@ namespace dwa_planner
     void DWAPlanner::local_goal_callback(geometry_msgs::msg::PoseStamped::SharedPtr msg)
     {
         local_goal = *msg;
-        tf2_ros::Buffer tfBuffer(this->get_clock());
-        tf2_ros::TransformListener tfListener(tfBuffer);
+        std::unique_ptr<tf2_ros::Buffer> tfBuffer;
+        tfBuffer = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+        std::shared_ptr<tf2_ros::TransformListener> tfListener{nullptr};
+        tfListener = std::make_shared<tf2_ros::TransformListener>(*tfBuffer);
         //地図座標系からロボット座標系に座標変換
         try{
-            transformStamped_ = tfBuffer.lookupTransform(ROBOT_FRAME, SOURCE_FRAME, this->get_clock()->now());
+            transformStamped_ = tfBuffer->lookupTransform(ROBOT_FRAME, SOURCE_FRAME, this->get_clock()->now());
             local_goal_pose_.position.x = transformStamped_.transform.translation.x;
             local_goal_pose_.position.y = transformStamped_.transform.translation.y;
             local_goal_pose_.position.z = transformStamped_.transform.translation.z;
