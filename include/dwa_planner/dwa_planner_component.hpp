@@ -101,12 +101,12 @@ namespace dwa_planner
             void odom_callback(nav_msgs::msg::Odometry::SharedPtr msg);
             void local_goal_callback(geometry_msgs::msg::PoseStamped::SharedPtr msg);
             void process_callback(void);
-            geometry_msgs::msg::Point scan_to_cartesian(void);
+            std::vector<geometry_msgs::msg::Point> scan_to_cartesian(void);
             float calc_heading(const std::vector<State> traj, geometry_msgs::msg::Pose goal_pose);
             float calc_dist(void);
             float calc_velocity(const std::vector<State> traj);
             Window calc_dynamic_window(void);
-            void motion(State state, const float velocity, const double yawrate);
+            State motion(State state, float velocity, float yawrate);
 
             std::vector<State> dwaplanner(Window dynamic_window, geometry_msgs::msg::Pose goal_pose);
 
@@ -118,26 +118,23 @@ namespace dwa_planner
             rclcpp::TimerBase::SharedPtr timer_;
 
             sensor_msgs::msg::LaserScan scan;
-            nav_msgs::msg::Odometry odometry;
+            nav_msgs::msg::Odometry robot_odometry;
             geometry_msgs::msg::PoseStamped local_goal;
 
             bool scan_update_flg;
-            geometry_msgs::Twist current_velocity;
-            bool odom_updated
+            bool odom_updated;
 
             std::vector<geometry_msgs::msg::Point> point_list;
 
-            tf2_ros::Buffer tfBuffer;
-            tf2_ros::TransformListener tfListener(tfBuffer);
             geometry_msgs::msg::TransformStamped transformStamped_;
             geometry_msgs::msg::Pose local_goal_pose_;
 
 
-            float MAX_VELOCITY_;
-            float MIN_VELOCITY_;
-            float MAX_ACCELERATION_;
-            float MAX_ANGULAR_ACCELERATION_;
-            float MAX_YAWRATE_;
+            double MAX_VELOCITY_;
+            double MIN_VELOCITY_;
+            double MAX_ACCELERATION_;
+            double MAX_ANGULAR_ACCELERATION_;
+            double MAX_YAWRATE_;
             float VELOCITY_RESOLUTION_;
             float YAWRATE_RESOLUTION_;
             float PREDICT_TIME_;
@@ -150,7 +147,7 @@ namespace dwa_planner
             std::string ROBOT_FRAME;
             std::string SOURCE_FRAME;
 
-    }
+    };
 }
 
 #endif

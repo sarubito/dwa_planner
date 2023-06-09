@@ -7,6 +7,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_auto REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -14,7 +15,26 @@ find_package(nav_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(ament_cmake_auto REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2 REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(rclcpp_components REQUIRED)
+
+ament_auto_find_build_dependencies()
+
+include_directories(include
+                    ${EIGEN3_INCLUDE_DIRS}
+)
+
+link_directories(
+  ${EIGEN3_INCLUDE_DIRS})
+
+ament_auto_add_library(dwa_planner SHARED src/dwa_planner_component.cpp)
+rclcpp_components_register_nodes(dwa_planner "dwa_planner::DWAPlanner")
+
+ament_auto_add_executable(dwaplanner
+  src/dwa_planner_component.cpp
+  src/dwa_planner_node.cpp
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -28,4 +48,4 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-ament_package()
+ament_auto_package()

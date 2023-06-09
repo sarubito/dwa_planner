@@ -3,7 +3,7 @@
 
 namespace dwa_planner
 {
-    DWAPlanner::DwaPlanner(const rclcpp::NodeOptions & options) : Node("dwa_planner", options)
+    DWAPlanner::DWAPlanner(const rclcpp::NodeOptions & options) : Node("dwa_planner", options)
     {
         scan_update_flg = false;
         scan_subscription_ = this->create_subscription<sensor_msgs::msg::LaserScan>("scan", 10, std::bind(&DWAPlanner::scan_callback, this, std::placeholders::_1));
@@ -58,7 +58,7 @@ namespace dwa_planner
         cmd_vel.angular.x = 0.0;
         cmd_vel.angular.y = 0.0;
         cmd_vel.angular.z = best_traj_[0].yawrate;
-        cmd_vel_publisher.publish(cmd_vel);
+        cmd_vel_publisher->publish(cmd_vel);
     }
 
     void DWAPlanner::scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
@@ -77,6 +77,8 @@ namespace dwa_planner
     void DWAPlanner::local_goal_callback(geometry_msgs::msg::PoseStamped::SharedPtr msg)
     {
         local_goal = *msg;
+        tf2_ros::Buffer tfBuffer(this->get_clock());
+        tf2_ros::TransformListener tfListener(tfBuffer);
         //地図座標系からロボット座標系に座標変換
         try{
             transformStamped_ = tfBuffer.lookupTransform(ROBOT_FRAME, SOURCE_FRAME, this->get_clock()->now());
@@ -97,11 +99,18 @@ namespace dwa_planner
         geometry_msgs::msg::Twist twist;
         twist.linear = robot_odometry.twist.twist.linear;
         Window window;
+        float velocity = twist.linear.x;
+        float angular_vel = twist.angular.z;
         //ダイナミックウィンドウの計算
-        window.min_velocity = std::max((twist.linear.x - MAX_ACCELERATION_*DT), MIN_VELOCITY_);
-        window.max_velocity = std::min((twist.linear.x + MAX_ACCELERATION_*DT),MAX_VELOCITY_);
-        window.min_yawrate = std::max((twist.angular.z - MAX_ANGULAR_ACCELERATION_*DT), -MAX_YAWRATE_);
-        window.max_yawrate = std::min((twist.angular.z + MAX_ANGULAR_ACCELERATION_*DT), MAX_YAWRATE_);
+        this->get_parameter("MAX_VELOCITY", MAX_VELOCITY_);
+        this->get_parameter("MIN_VELOCITY", MIN_VELOCITY_);
+        this->get_parameter("MAX_YAWRATE", MAX_YAWRATE_);
+        this->get_parameter("MAX_ACCELERATION", MAX_ACCELERATION_);
+        this->get_parameter("MAX_ANGULAR_ACCELERATION", MAX_ANGULAR_ACCELERATION_);
+        window.min_velocity = std::max((velocity - MAX_ACCELERATION_*DT), MIN_VELOCITY_);
+        window.max_velocity = std::min((velocity + MAX_ACCELERATION_*DT),MAX_VELOCITY_);
+        window.min_yawrate = std::max((angular_vel - MAX_ANGULAR_ACCELERATION_*DT), -MAX_YAWRATE_);
+        window.max_yawrate = std::min((angular_vel + MAX_ANGULAR_ACCELERATION_*DT), MAX_YAWRATE_);
 
         return window;
     }
@@ -110,12 +119,13 @@ namespace dwa_planner
 
     float DWAPlanner::calc_heading(const std::vector<State> traj,geometry_msgs::msg::Pose goal_pose)
     {
+        float heading=0.0;
         float angle = atan2(traj[traj.size()-1].y_position - goal_pose.position.y, traj[traj.size()-1].y_position - goal_pose.position.x);
-        if(angle > (2 * asin(odometry.pose.pose.orientation.z)))
+        if(angle > (2 * asin(robot_odometry.pose.pose.orientation.z)))
         {
-            float heading = angle - (2 * asin(odometry.pose.pose.orientation.z));
+            heading = angle - (2 * asin(robot_odometry.pose.pose.orientation.z));
         } else {
-            float heading = (2 * asin(odometry.pose.pose.orientation.z)) - angle;
+            heading = (2 * asin(robot_odometry.pose.pose.orientation.z)) - angle;
         }        
         heading = 180 - heading;
         return heading;
@@ -141,7 +151,7 @@ namespace dwa_planner
 
     float DWAPlanner::calc_velocity(const std::vector<State> traj)
     {
-        float cost traj[traj.size()-1].velocity; //並進速度が出ていれば評価が上がる
+        float cost = traj[traj.size()-1].velocity; //並進速度が出ていれば評価が上がる
         return cost;
     }
 
@@ -149,7 +159,7 @@ namespace dwa_planner
     std::vector<geometry_msgs::msg::Point> DWAPlanner::scan_to_cartesian(void)
     {
         std::vector<geometry_msgs::msg::Point> point_list;
-        eometry_msgs::msg::Point xyz;
+        geometry_msgs::msg::Point xyz;
         float angle = scan.angle_min;
         for(auto r : scan.ranges){
             xyz.x = r * cos(angle);
@@ -208,7 +218,7 @@ namespace dwa_planner
             cost = (HEADING_COST_GAIN * heading) + (DIST_COST_GAIN * dist) + (VELOCITY_COST_GAIN * velocity);
             if(final_cost == NULL){ 
                 final_cost = cost;
-                element = i
+                element = i;
             }else{
                 if(final_cost < cost){
                     final_cost = cost;
@@ -218,4 +228,8 @@ namespace dwa_planner
         }
         return trajectorys_[element]; 
     }
+
+    DWAPlanner::~DWAPlanner(void){}
 }
+
+RCLCPP_COMPONENTS_REGISTER_NODE(dwa_planner::DWAPlanner)
